@@ -6,7 +6,8 @@ import threading
 import queue
 from typing import Callable, Dict, List, Any
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
+from collections import deque, field
 import json
 
 
@@ -14,17 +15,15 @@ import json
 class Event:
     """Structured event data"""
     event_type: str
-    timestamp: str
     priority: str = "INFO"
     detail: str = ""
     source: str = ""
     data: Dict[str, Any] = None
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
     
     def __post_init__(self):
         if self.data is None:
             self.data = {}
-        if not self.timestamp:
-            self.timestamp = datetime.now().isoformat(timespec="seconds")
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -42,6 +41,8 @@ class EventBus:
         self._lock = threading.Lock()
         self._running = False
         self._worker_thread = None
+        from collections import deque
+        self._history: deque = deque(maxlen=200)
     
     def subscribe(self, event_type: str, callback: Callable) -> None:
         """Subscribe to events of a specific type"""
@@ -90,6 +91,7 @@ class EventBus:
     def _notify_subscribers(self, event: Event) -> None:
         """Notify all subscribers of an event"""
         with self._lock:
+            self._history.append(event.to_dict())
             subscribers = self._subscribers.get(event.event_type, [])
             all_subscribers = self._subscribers.get("*", [])  # Wildcard subscribers
             
@@ -100,23 +102,9 @@ class EventBus:
                     print(f"[EventBus] Error in subscriber callback: {e}")
     
     def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get recent events from the queue (non-destructive)"""
-        events = []
-        temp_queue = queue.Queue()
-        
-        while not self._event_queue.empty() and len(events) < limit:
-            try:
-                event = self._event_queue.get_nowait()
-                events.append(event.to_dict())
-                temp_queue.put(event)
-            except queue.Empty:
-                break
-        
-        # Put events back
-        while not temp_queue.empty():
-            self._event_queue.put(temp_queue.get())
-        
-        return events
+        """Get recent events from history (non-destructive, thread-safe)"""
+        with self._lock:
+            return list(self._history)[-limit:]
 
 
 # Global event bus instance

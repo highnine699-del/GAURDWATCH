@@ -77,6 +77,24 @@ class ScreenshotsModule:
                     source="screenshots"
                 ))
     
+    def capture_now(self, label: str = "manual") -> None:
+        """Capture an immediate screenshot on demand"""
+        threading.Thread(target=self._capture_single, args=(label,), daemon=True).start()
+
+    def _capture_single(self, label: str) -> None:
+        """Capture a single screenshot and record it"""
+        from datetime import datetime
+        ts = datetime.now().strftime("%H%M%S")
+        filename = f"screen_{label}_{ts}.png"
+        filepath = self.shots_dir / filename
+        try:
+            with mss.mss() as sct:
+                sct.shot(output=str(filepath))
+            self.db.add_file(session_id=self.session_id, file_path=filepath, file_type="screenshot")
+            event_bus.publish(Event(event_type="SCREENSHOT", detail=filename, source="screenshots", priority="INFO"))
+        except Exception as e:
+            print(f"[Screenshots] Failed to capture: {e}")
+
     def start(self) -> None:
         """Start screenshot capture"""
         if not config.modules.get("screenshots", True):
@@ -117,6 +135,45 @@ class ScreenshotsModule:
             return len(list(self.shots_dir.glob(ext)))
         except Exception:
             return 0
+    
+    def capture_now(self, label: str = "manual") -> None:
+        """Capture immediate screenshot"""
+        try:
+            from datetime import datetime
+            ts = datetime.now().strftime("%H%M%S")
+            
+            image_format = config.storage.get("screenshot_format", "jpeg").lower()
+            ext = ".jpg" if image_format == "jpeg" else ".png"
+            filename = f"screen_{ts}{ext}"
+            filepath = self.shots_dir / filename
+            
+            with mss.mss() as sct:
+                if image_format == "jpeg":
+                    sct.shot(output=str(filepath), quality=config.storage.get("screenshot_quality", 85))
+                else:
+                    sct.shot(output=str(filepath))
+            
+            self.db.add_file(
+                session_id=self.session_id,
+                file_path=str(filepath.relative_to(self.session_dir)),
+                file_type="screenshot",
+                size_bytes=filepath.stat().st_size
+            )
+            
+            event_bus.publish(Event(
+                event_type="SCREENSHOT",
+                priority="INFO",
+                detail=f"Manual screenshot: {filename}",
+                source="screenshots",
+                data={"filename": filename}
+            ))
+        except Exception as e:
+            event_bus.publish(Event(
+                event_type="SCREENSHOT_ERROR",
+                priority="INFO",
+                detail=str(e),
+                source="screenshots"
+            ))
 
 
 def get_idle_seconds() -> float:

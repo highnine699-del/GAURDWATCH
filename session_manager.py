@@ -5,7 +5,7 @@ Manages evidence sessions with automatic cleanup and rotation
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict
 from config import config
 from database import EvidenceDatabase
 from hashing import EvidenceHasher

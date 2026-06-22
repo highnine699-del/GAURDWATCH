@@ -17,16 +17,16 @@ class EvidenceEncryptor:
     
     def __init__(self, password: str = None):
         self.password = password or self._generate_password()
-        self._key = self._derive_key(self.password)
+        self.salt = os.urandom(16)  # Generate random salt per session
+        self._key = self._derive_key(self.password, self.salt)
         self._fernet = Fernet(self._key)
     
     def _generate_password(self) -> str:
         """Generate a random password"""
         return os.urandom(32).hex()
     
-    def _derive_key(self, password: str) -> bytes:
-        """Derive encryption key from password"""
-        salt = b'guardwatch_salt'  # In production, use random salt per session
+    def _derive_key(self, password: str, salt: bytes) -> bytes:
+        """Derive encryption key from password and salt"""
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
@@ -53,8 +53,9 @@ class EvidenceEncryptor:
         
         encrypted_data = self.encrypt(data)
         
+        # Prepend salt to ciphertext for later decryption
         with open(encrypted_path, 'wb') as f:
-            f.write(encrypted_data)
+            f.write(self.salt + encrypted_data)
         
         return encrypted_path
     
@@ -67,9 +68,16 @@ class EvidenceEncryptor:
                 output_path = encrypted_path.with_suffix('')
         
         with open(encrypted_path, 'rb') as f:
-            encrypted_data = f.read()
+            data = f.read()
         
-        decrypted_data = self.decrypt(encrypted_data)
+        # Extract salt (first 16 bytes) and ciphertext
+        salt = data[:16]
+        encrypted_data = data[16:]
+        
+        # Re-derive key with the extracted salt
+        key = self._derive_key(self.password, salt)
+        fernet = Fernet(key)
+        decrypted_data = fernet.decrypt(encrypted_data)
         
         with open(output_path, 'wb') as f:
             f.write(decrypted_data)

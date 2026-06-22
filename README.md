@@ -71,13 +71,19 @@ pythonw main.py
 ```
 Runs completely in background — no visible window. Dashboard still available at `http://localhost:5555`.
 
-### Option 3: View Evidence from Previous Sessions
+### Option 3: Start in Paused Mode (Save CPU/Battery)
+```cmd
+python main.py --pause
+```
+Or double-click `pause.bat`. Starts GuardWatch with monitoring paused. Dashboard remains active so you can resume anytime. Use this when you want to save CPU/battery but keep GuardWatch ready.
+
+### Option 4: View Evidence from Previous Sessions
 ```cmd
 python main.py --report
 ```
 Lists all sessions with metadata.
 
-### Option 4: Delete All Evidence
+### Option 5: Delete All Evidence
 ```cmd
 python main.py --clear
 ```
@@ -182,7 +188,7 @@ Module → Event Bus → Dashboard
 The v4.0 dashboard includes:
 
 ### Active Controls
-- **Pause/Resume**: Temporarily stop monitoring
+- **Pause/Resume**: Temporarily stop monitoring to save CPU/battery. Dashboard stays active.
 - **Screenshot**: Trigger immediate screenshot
 - **Export**: Download evidence in JSON/HTML/CSV/ZIP
 - **Open Folder**: Open evidence directory

@@ -8,6 +8,7 @@ from typing import Dict, Callable, Optional
 from datetime import datetime
 from enum import Enum
 import traceback
+from config import config
 
 
 class ModuleStatus(Enum):

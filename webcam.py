@@ -4,7 +4,6 @@ Captures photos on wake events for intruder identification
 """
 import threading
 import time
-import cv2
 from pathlib import Path
 from typing import Optional
 from event_bus import Event, event_bus

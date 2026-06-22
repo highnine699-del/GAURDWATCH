@@ -21,6 +21,7 @@ class RiskEngine:
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
         self._event_buffer: List[Dict] = []
+        self._buffer_lock = threading.Lock()
         self._correlation_window = config.risk_engine.get("correlation_window_sec", 300)
         self._high_threshold = config.risk_engine.get("high_priority_threshold", 3)
         self._critical_threshold = config.risk_engine.get("critical_threshold", 5)
@@ -43,42 +44,46 @@ class RiskEngine:
         
         event_dict = event.to_dict()
         event_dict["processed"] = False
-        self._event_buffer.append(event_dict)
         
-        # Keep buffer within correlation window
-        self._cleanup_buffer()
+        with self._buffer_lock:
+            self._event_buffer.append(event_dict)
+            # Keep buffer within correlation window
+            self._cleanup_buffer_internal()
     
+    def _cleanup_buffer_internal(self) -> None:
+        """Must be called with _buffer_lock held"""
+        cutoff = datetime.now() - timedelta(seconds=self._correlation_window)
+        self._event_buffer = [e for e in self._event_buffer
+                              if datetime.fromisoformat(e["timestamp"]) > cutoff]
+
     def _cleanup_buffer(self) -> None:
         """Remove events older than correlation window"""
-        cutoff = datetime.now() - timedelta(seconds=self._correlation_window)
-        self._event_buffer = [
-            e for e in self._event_buffer
-            if datetime.fromisoformat(e["timestamp"]) > cutoff
-        ]
+        with self._buffer_lock:
+            self._cleanup_buffer_internal()
     
     def _calculate_risk_score(self) -> int:
         """Calculate risk score based on buffered events"""
         score = 0
-        recent_events = []
         
-        cutoff = datetime.now() - timedelta(seconds=self._correlation_window)
-        
-        for event in self._event_buffer:
-            if datetime.fromisoformat(event["timestamp"]) > cutoff:
-                event_type = event["event_type"]
-                weight = self._risk_weights.get(event_type, 0)
-                score += weight
-                recent_events.append(event)
+        with self._buffer_lock:
+            cutoff = datetime.now() - timedelta(seconds=self._correlation_window)
+            
+            for event in self._event_buffer:
+                if datetime.fromisoformat(event["timestamp"]) > cutoff:
+                    event_type = event["event_type"]
+                    weight = self._risk_weights.get(event_type, 0)
+                    score += weight
         
         return score
     
     def _analyze_patterns(self) -> Optional[Dict]:
         """Analyze event patterns for suspicious activity"""
-        cutoff = datetime.now() - timedelta(seconds=self._correlation_window)
-        recent_events = [
-            e for e in self._event_buffer
-            if datetime.fromisoformat(e["timestamp"]) > cutoff
-        ]
+        with self._buffer_lock:
+            cutoff = datetime.now() - timedelta(seconds=self._correlation_window)
+            recent_events = [
+                e for e in self._event_buffer
+                if datetime.fromisoformat(e["timestamp"]) > cutoff
+            ]
         
         if not recent_events:
             return None
@@ -220,8 +225,9 @@ class RiskEngine:
     
     def get_current_risk(self) -> Dict:
         """Get current risk assessment"""
-        return {
-            "score": self._calculate_risk_score(),
-            "buffer_size": len(self._event_buffer),
-            "patterns": self._analyze_patterns()
-        }
+        with self._buffer_lock:
+            return {
+                "score": self._calculate_risk_score(),
+                "buffer_size": len(self._event_buffer),
+                "patterns": self._analyze_patterns()
+            }

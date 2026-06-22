@@ -250,7 +250,17 @@ class EvidenceDatabase:
                 "SELECT * FROM sessions WHERE session_id = ?",
                 (session_id,)
             )
-            session = dict(cursor.fetchone())
+            row = cursor.fetchone()
+            if not row:
+                return {
+                    "session_id": session_id,
+                    "total_events": 0,
+                    "high_priority_events": 0,
+                    "file_counts": {},
+                    "duration_secs": 0
+                }
+            
+            session = dict(row)
             
             # Count files by type
             cursor.execute(

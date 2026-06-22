@@ -1,15 +1,17 @@
 """
 Report Generator with Multiple Export Formats
-Supports PDF, HTML, JSON, CSV, ZIP exports
+Supports PDF, HTML, JSON, CSV, ZIP exports with digital signatures
 """
 import json
 import csv
 import zipfile
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from database import EvidenceDatabase
 from hashing import EvidenceHasher
+from digital_signature import DigitalSigner
+from config import config
 
 
 class ReportGenerator:

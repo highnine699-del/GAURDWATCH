@@ -99,19 +99,79 @@ class FailedLoginsModule:
             source="failed_logins",
             data={"count": count}
         ))
+        
+        return count
+    
+    def _poll_loop(self) -> None:
+        """Polling loop for checking failed logins"""
+        # Establish baseline count
+        self._baseline_count = self.check_failed_logins()
+        
+        while self._running and not self._stop_event.is_set():
+            try:
+                # Wait 60 seconds between checks
+                for _ in range(60):
+                    if self._stop_event.is_set():
+                        return
+                    time.sleep(1)
+                
+                # Check for new failed logins
+                current_count = self.check_failed_logins()
+                new_failures = current_count - self._baseline_count
+                
+                if new_failures > 0:
+                    priority = "HIGH" if new_failures > 2 else "INFO"
+                    detail = f"{new_failures} new failed login attempt(s) since last check"
+                    if new_failures > 2:
+                        detail += " — someone was trying passwords!"
+                    
+                    event_bus.publish(Event(
+                        event_type="FAILED_LOGINS",
+                        priority=priority,
+                        detail=detail,
+                        source="failed_logins",
+                        data={"count": new_failures}
+                    ))
+                    
+                    # Update baseline
+                    self._baseline_count = current_count
+                    
+            except Exception as e:
+                event_bus.publish(Event(
+                    event_type="FAILED_LOGINS_ERROR",
+                    priority="INFO",
+                    detail=str(e),
+                    source="failed_logins"
+                ))
     
     def start(self) -> None:
         """Start failed login checking"""
+        if not config.modules.get("failed_logins", True):
+            event_bus.publish(Event(
+                event_type="FAILED_LOGINS_SKIP",
+                priority="INFO",
+                detail="Failed login check disabled in config",
+                source="failed_logins"
+            ))
+            return
+        
         self._running = True
-        self.check_failed_logins()
+        self._stop_event.clear()
+        
+        self._worker_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._worker_thread.start()
         
         event_bus.publish(Event(
             event_type="FAILED_LOGINS_START",
             priority="INFO",
-            detail="Failed login checker started",
+            detail="Failed login checker started (polling every 60s)",
             source="failed_logins"
         ))
     
     def stop(self) -> None:
         """Stop failed login checking"""
         self._running = False
+        self._stop_event.set()
+        
+        if self._worker_thread:
+            self._worker_thread.join(timeout=5)

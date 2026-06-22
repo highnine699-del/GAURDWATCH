@@ -22,14 +22,18 @@ class Dashboard:
         self.session_id = session_id
         self.session_dir = session_dir
         self.app = Flask(__name__)
+        self.app.config['SECRET_KEY'] = 'guardwatch-secret-key'
+        self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         self._running = False
         self._dashboard_thread: threading.Thread = None
         self._paused = False
         self._screenshot_callback = None
         self._export_callback = None
         self._stop_callback = None
+        self._pause_callback = None
         
         self._setup_routes()
+        self._setup_websocket()
     
     def _setup_routes(self) -> None:
         """Setup dashboard routes"""
@@ -56,6 +60,7 @@ class Dashboard:
             return render_template_string(self._get_dashboard_html())
         
         @self.app.route('/api/events')
+    @require_auth
         def get_events():
             """Get recent events"""
             limit = request.args.get('limit', 50, type=int)
@@ -74,9 +79,15 @@ class Dashboard:
         def get_stats():
             """Get session statistics"""
             stats = self.db.get_session_stats(self.session_id)
+            # Fix field names for dashboard compatibility
+            if 'high_priority_events' in stats:
+                stats['high_priority'] = stats['high_priority_events']
+            if 'duration_secs' not in stats and 'duration' in stats:
+                stats['duration_secs'] = stats['duration']
             return jsonify(stats)
         
         @self.app.route('/api/search')
+        @require_auth
         def search_events():
             """Search events"""
             query = request.args.get('q', '')
@@ -84,6 +95,22 @@ class Dashboard:
                 return jsonify({"events": []})
             
             events = self.db.search_events(query, self.session_id)
+            return jsonify({"events": events})
+        
+        @self.app.route('/api/events')
+        @require_auth
+        def get_events():
+            """Get events with optional filters"""
+            event_type = request.args.get('type')
+            priority = request.args.get('priority')
+            limit = request.args.get('limit', 100, type=int)
+            
+            events = self.db.get_events(
+                session_id=self.session_id,
+                event_type=event_type,
+                priority=priority,
+                limit=limit
+            )
             return jsonify({"events": events})
         
         @self.app.route('/api/high_priority')
@@ -101,6 +128,7 @@ class Dashboard:
             return jsonify({"paused": self._paused})
         
         @self.app.route('/api/screenshot', methods=['POST'])
+        @require_auth
         def take_screenshot():
             """Trigger immediate screenshot"""
             if self._screenshot_callback:
@@ -109,6 +137,7 @@ class Dashboard:
             return jsonify({"success": False, "error": "Screenshot callback not set"})
         
         @self.app.route('/api/export', methods=['POST'])
+        @require_auth
         def export_evidence():
             """Export evidence"""
             format_type = request.json.get('format', 'json')
@@ -133,11 +162,12 @@ class Dashboard:
             return jsonify({"status": "healthy"})
         
         @self.app.route('/api/open_folder')
+        @require_auth
         def open_evidence_folder():
             """Open evidence folder in file explorer"""
             import subprocess
             try:
-                subprocess.Popen(f'explorer "{self.session_dir}"')
+                subprocess.Popen(['explorer', str(self.session_dir)])
                 return jsonify({"success": True})
             except Exception as e:
                 return jsonify({"success": False, "error": str(e)})
@@ -148,6 +178,10 @@ class Dashboard:
             """Download evidence file"""
             try:
                 filepath = self.session_dir / filename
+                # Path traversal protection: ensure file is within session directory
+                resolved_path = filepath.resolve()
+                if not str(resolved_path).startswith(str(self.session_dir.resolve())):
+                    return jsonify({"error": "Access denied"}), 403
                 if filepath.exists():
                     return send_file(filepath, as_attachment=True)
                 return jsonify({"error": "File not found"}), 404
@@ -455,6 +489,10 @@ class Dashboard:
         """Set callback for stopping monitoring"""
         self._stop_callback = callback
     
+    def set_pause_callback(self, callback) -> None:
+        """Set callback for pausing/resuming monitoring"""
+        self._pause_callback = callback
+    
     def start(self) -> None:
         """Start dashboard server"""
         if not config.dashboard.get("enabled", True):
@@ -497,20 +535,4 @@ class Dashboard:
     def stop(self) -> None:
         """Stop dashboard server"""
         self._running = False
-        # Flask doesn't have a clean shutdown, so we just let the thread die
-        )
-        self._dashboard_thread.start()
-        
-        url = f"http://localhost:{port}"
-        print(f"[Dashboard] Dashboard running at {url}")
-        
-        # Auto-open browser
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-    
-    def stop(self) -> None:
-        """Stop dashboard server"""
-        self._running = False
-        # Flask doesn't have a clean shutdown, so we just let the thread die
+        # Flask's built-in server has no clean stop; daemon thread dies with main process

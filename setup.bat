@@ -19,7 +19,7 @@ if errorlevel 1 (
 echo Installing required packages...
 echo.
 
-pip install -q mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog cryptography flask-socketio
+pip install -q mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog cryptography flask-socketio weasyprint
 
 if errorlevel 1 (
     echo.

@@ -48,12 +48,15 @@ class FileActivityHandler(FileSystemEventHandler):
         path = Path(event.src_path)
         priority = "HIGH" if path.suffix in self._suspicious_extensions else "INFO"
         
+        # Safe file size to handle deleted files
+        size = _safe_file_size(path)
+        
         event_bus.publish(Event(
             event_type="FILE_CREATED",
             priority=priority,
-            detail=f"Created → {path.name} ({path.stat().st_size} bytes)",
+            detail=f"Created → {path.name} ({size} bytes)",
             source="file_monitor",
-            data={"path": str(path), "size": path.stat().st_size, "extension": path.suffix}
+            data={"path": str(path), "size": size, "extension": path.suffix}
         ))
     
     def on_deleted(self, event):

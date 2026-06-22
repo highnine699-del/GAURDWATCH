@@ -201,18 +201,6 @@ class Config:
                 dir_path = Path.home() / dir_str
             dirs.append(dir_path)
         return dirs
-    
-    def get(self, *keys, default: Any = None) -> Any:
-        """Get configuration value by nested keys"""
-        value = self._config
-        for key in keys:
-            if isinstance(value, dict):
-                value = value.get(key)
-                if value is None:
-                    return default
-            else:
-                return default
-        return value
 
 
 # Global config instance

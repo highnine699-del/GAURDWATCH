@@ -90,12 +90,15 @@ class GuardWatch:
         self.dashboard.set_screenshot_callback(self._trigger_screenshot)
         self.dashboard.set_export_callback(self._export_evidence)
         self.dashboard.set_stop_callback(self.stop)
+        self.dashboard.set_pause_callback(self._pause_monitoring)
+        
+        # Start event bus
+        event_bus.start()
     
     def _trigger_screenshot(self) -> None:
         """Trigger immediate screenshot"""
         if "screenshots" in self.modules:
-            # This would need to be implemented in the screenshots module
-            pass
+            self.modules["screenshots"].capture_now("manual")
     
     def _export_evidence(self, format_type: str) -> str:
         """Export evidence in specified format"""
@@ -105,6 +108,27 @@ class GuardWatch:
         except Exception as e:
             print(f"[Export] Failed: {e}")
             return None
+    
+    def _pause_monitoring(self, paused: bool) -> None:
+        """Pause or resume all monitoring modules"""
+        if paused:
+            print("[GuardWatch] Pausing monitoring to save CPU/battery...")
+            for name, module in self.modules.items():
+                try:
+                    module.stop()
+                    print(f"  ✓ Paused {name}")
+                except Exception as e:
+                    print(f"  ✗ Error pausing {name}: {e}")
+            print("[GuardWatch] Monitoring paused. Dashboard still active.")
+        else:
+            print("[GuardWatch] Resuming monitoring...")
+            for name, module in self.modules.items():
+                try:
+                    module.start()
+                    print(f"  ✓ Resumed {name}")
+                except Exception as e:
+                    print(f"  ✗ Error resuming {name}: {e}")
+            print("[GuardWatch] Monitoring resumed.")
     
     def start_modules(self) -> None:
         """Start all monitoring modules"""
@@ -244,6 +268,10 @@ class GuardWatch:
         if self.dashboard:
             self.dashboard.stop()
             print("  ✓ Stopped dashboard")
+        
+        # Stop event bus
+        event_bus.stop()
+        print("  ✓ Stopped event bus")
         
         # Capture browser history after
         if "browser" in self.modules:
@@ -394,6 +422,7 @@ def main():
     parser = argparse.ArgumentParser(description="GuardWatch v4.0 — PC Intruder Evidence Suite")
     parser.add_argument("--report", action="store_true", help="Show evidence report")
     parser.add_argument("--clear", action="store_true", help="Clear all evidence")
+    parser.add_argument("--pause", action="store_true", help="Start in paused mode")
     
     args = parser.parse_args()
     
@@ -407,7 +436,10 @@ def main():
         
         try:
             guardwatch.initialize()
-            guardwatch.start_modules()
+            if not args.pause:
+                guardwatch.start_modules()
+            else:
+                print("Starting in paused mode. Use dashboard to resume.")
             guardwatch.run()
         except Exception as e:
             print(f"Error: {e}")

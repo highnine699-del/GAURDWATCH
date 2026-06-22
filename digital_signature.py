@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 import base64
 
@@ -15,9 +16,15 @@ import base64
 class DigitalSigner:
     """Digital signature generator for evidence reports"""
     
-    def __init__(self, private_key_path: Path = None, public_key_path: Path = None):
-        self.private_key_path = private_key_path or Path("private_key.pem")
-        self.public_key_path = public_key_path or Path("public_key.pem")
+    def __init__(self, session_dir: Path = None, private_key_path: Path = None, public_key_path: Path = None):
+        if session_dir:
+            # Store keys in session evidence directory
+            self.private_key_path = private_key_path or session_dir / "private_key.pem"
+            self.public_key_path = public_key_path or session_dir / "public_key.pem"
+        else:
+            # Fallback to current directory (audit: consider password-protecting)
+            self.private_key_path = private_key_path or Path("private_key.pem")
+            self.public_key_path = public_key_path or Path("public_key.pem")
         self._private_key = None
         self._public_key = None
         

@@ -13,15 +13,15 @@ class EvidenceHasher:
     
     def __init__(self, session_dir: Path):
         self.session_dir = session_dir
-        self.hash_file = session_dir / "evidence_hashes.json"
+        self.hashes_file = session_dir / "evidence_hashes.json"
         self._hashes: Dict[str, str] = {}
         self._load_hashes()
     
     def _load_hashes(self) -> None:
         """Load existing hashes from file"""
-        if self.hash_file.exists():
+        if self.hashes_file.exists():
             try:
-                with open(self.hash_file, 'r', encoding='utf-8') as f:
+                with open(self.hashes_file, 'r', encoding='utf-8') as f:
                     self._hashes = json.load(f)
             except Exception:
                 self._hashes = {}
@@ -29,7 +29,7 @@ class EvidenceHasher:
     def _save_hashes(self) -> None:
         """Save hashes to file"""
         try:
-            with open(self.hash_file, 'w', encoding='utf-8') as f:
+            with open(self.hashes_file, 'w', encoding='utf-8') as f:
                 json.dump(self._hashes, f, indent=2)
         except Exception as e:
             print(f"[Hasher] Failed to save hashes: {e}")
