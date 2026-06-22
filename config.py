@@ -5,7 +5,7 @@ Loads and validates configuration from config.json
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 
 class Config:
@@ -186,16 +186,16 @@ class Config:
     def get_evidence_root(self) -> Path:
         """Get evidence root path with environment variable expansion"""
         root_str = self.storage.get("evidence_root", "APPDATA/Microsoft/CLR/gw_evidence")
-        root_str = root_str.replace("APPDATA", os.environ.get("APPDATA", Path.home()))
-        root_str = root_str.replace("LOCALAPPDATA", os.environ.get("LOCALAPPDATA", ""))
+        root_str = root_str.replace("APPDATA", os.environ.get("APPDATA", str(Path.home())))
+        root_str = root_str.replace("LOCALAPPDATA", os.environ.get("LOCALAPPDATA", str(Path.home())))
         return Path(root_str)
     
-    def get_monitored_dirs(self) -> list[Path]:
+    def get_monitored_dirs(self) -> List[Path]:
         """Get list of monitored directories with environment variable expansion"""
         dirs = []
         for dir_str in self.monitoring.get("monitored_dirs", []):
-            dir_str = dir_str.replace("APPDATA", os.environ.get("APPDATA", ""))
-            dir_str = dir_str.replace("LOCALAPPDATA", os.environ.get("LOCALAPPDATA", ""))
+            dir_str = dir_str.replace("APPDATA", os.environ.get("APPDATA", str(Path.home())))
+            dir_str = dir_str.replace("LOCALAPPDATA", os.environ.get("LOCALAPPDATA", str(Path.home())))
             dir_path = Path(dir_str)
             if not dir_path.is_absolute():
                 dir_path = Path.home() / dir_str

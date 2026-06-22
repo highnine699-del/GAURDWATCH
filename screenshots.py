@@ -5,6 +5,7 @@ Captures desktop screenshots at random intervals
 import threading
 import time
 import random
+import sys
 from pathlib import Path
 import mss
 from event_bus import Event, event_bus
@@ -77,24 +78,6 @@ class ScreenshotsModule:
                     source="screenshots"
                 ))
     
-    def capture_now(self, label: str = "manual") -> None:
-        """Capture an immediate screenshot on demand"""
-        threading.Thread(target=self._capture_single, args=(label,), daemon=True).start()
-
-    def _capture_single(self, label: str) -> None:
-        """Capture a single screenshot and record it"""
-        from datetime import datetime
-        ts = datetime.now().strftime("%H%M%S")
-        filename = f"screen_{label}_{ts}.png"
-        filepath = self.shots_dir / filename
-        try:
-            with mss.mss() as sct:
-                sct.shot(output=str(filepath))
-            self.db.add_file(session_id=self.session_id, file_path=filepath, file_type="screenshot")
-            event_bus.publish(Event(event_type="SCREENSHOT", detail=filename, source="screenshots", priority="INFO"))
-        except Exception as e:
-            print(f"[Screenshots] Failed to capture: {e}")
-
     def start(self) -> None:
         """Start screenshot capture"""
         if not config.modules.get("screenshots", True):
@@ -178,6 +161,9 @@ class ScreenshotsModule:
 
 def get_idle_seconds() -> float:
     """Get idle seconds (imported from monitor to avoid circular import)"""
+    if sys.platform != 'win32':
+        return 0.0
+
     import ctypes
     
     class _LASTINPUTINFO(ctypes.Structure):

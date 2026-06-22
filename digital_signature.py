@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 import base64
 
@@ -16,15 +15,16 @@ import base64
 class DigitalSigner:
     """Digital signature generator for evidence reports"""
     
-    def __init__(self, session_dir: Path = None, private_key_path: Path = None, public_key_path: Path = None):
+    def __init__(self, session_dir: Path = None, private_key_path: Path = None, public_key_path: Path = None, password: bytes = None):
         if session_dir:
             # Store keys in session evidence directory
             self.private_key_path = private_key_path or session_dir / "private_key.pem"
             self.public_key_path = public_key_path or session_dir / "public_key.pem"
         else:
-            # Fallback to current directory (audit: consider password-protecting)
+            # Fallback to current directory
             self.private_key_path = private_key_path or Path("private_key.pem")
             self.public_key_path = public_key_path or Path("public_key.pem")
+        self._password = password
         self._private_key = None
         self._public_key = None
         
@@ -34,13 +34,17 @@ class DigitalSigner:
     def _load_or_generate_keys(self) -> None:
         """Load existing keys or generate new ones"""
         if self.private_key_path.exists() and self.public_key_path.exists():
-            # Load existing keys
-            with open(self.private_key_path, "rb") as f:
-                self._private_key = serialization.load_pem_private_key(
-                    f.read(),
-                    password=None,
-                    backend=default_backend()
-                )
+            # Load existing keys (with optional password protection)
+            try:
+                with open(self.private_key_path, "rb") as f:
+                    self._private_key = serialization.load_pem_private_key(
+                        f.read(),
+                        password=self._password,
+                        backend=default_backend()
+                    )
+            except Exception as e:
+                raise ValueError(f"Failed to load private key: {e}. Check password.") from e
+            
             with open(self.public_key_path, "rb") as f:
                 self._public_key = serialization.load_pem_public_key(
                     f.read(),
@@ -59,11 +63,17 @@ class DigitalSigner:
             self._save_keys()
     
     def _save_keys(self) -> None:
-        """Save keys to files"""
+        """Save keys to files with optional password protection"""
+        # Use password encryption if provided, otherwise no encryption (with warning)
+        if self._password:
+            encryption = serialization.BestAvailableEncryption(self._password)
+        else:
+            encryption = serialization.NoEncryption()
+        
         private_pem = self._private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=encryption
         )
         
         public_pem = self._public_key.public_bytes(
@@ -73,6 +83,8 @@ class DigitalSigner:
         
         with open(self.private_key_path, "wb") as f:
             f.write(private_pem)
+        # Restrict permissions on private key file
+        self.private_key_path.chmod(0o600)
         
         with open(self.public_key_path, "wb") as f:
             f.write(public_pem)

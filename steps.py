@@ -7,13 +7,32 @@ import time
 import ctypes
 from datetime import datetime
 from pathlib import Path
-from PIL import Image, ImageDraw
-import mss
-from pynput import mouse
 from typing import Optional
 from event_bus import Event, event_bus
 from config import config
 from database import EvidenceDatabase
+
+try:
+    from PIL import Image, ImageDraw
+    PIL_OK = True
+except ImportError:
+    Image = None
+    ImageDraw = None
+    PIL_OK = False
+
+try:
+    import mss
+    MSS_OK = True
+except ImportError:
+    mss = None
+    MSS_OK = False
+
+try:
+    from pynput import mouse
+    PYNPUT_OK = True
+except ImportError:
+    mouse = None
+    PYNPUT_OK = False
 
 
 class StepsModule:
@@ -27,10 +46,13 @@ class StepsModule:
         self.session_id = session_id
         self._running = False
         self._stop_event = threading.Event()
-        self._listener: Optional[mouse.Listener] = None
+        self._listener: Optional['mouse.Listener'] = None
         self._step_count = 0
         self._last_click_time = 0.0
         self._min_gap = config.intervals.get("step_min_gap_sec", 0.6)
+        self._mouse_ok = PYNPUT_OK
+        self._mss_ok = MSS_OK
+        self._pil_ok = PIL_OK
     
     def _capture_step(self, x: int, y: int, btn_label: str) -> None:
         """Capture annotated screenshot of click"""
@@ -128,6 +150,15 @@ class StepsModule:
                 event_type="STEPS_SKIP",
                 priority="INFO",
                 detail="Steps recorder disabled in config",
+                source="steps"
+            ))
+            return
+
+        if not (self._mouse_ok and self._mss_ok and self._pil_ok):
+            event_bus.publish(Event(
+                event_type="STEPS_SKIP",
+                priority="INFO",
+                detail="Required packages for steps recorder are missing",
                 source="steps"
             ))
             return

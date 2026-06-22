@@ -4,13 +4,17 @@ Tracks all copy/paste operations
 """
 import threading
 import time
-import pyperclip
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 from event_bus import Event, event_bus
 from config import config
 from database import EvidenceDatabase
+
+try:
+    import pyperclip
+except ImportError:
+    pyperclip = None
 
 
 class ClipboardModule:
@@ -25,6 +29,7 @@ class ClipboardModule:
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
         self._last_content = ""
+        self._available = pyperclip is not None
     
     def _write_clipboard(self, content: str) -> None:
         """Write clipboard content to file"""
@@ -42,6 +47,15 @@ class ClipboardModule:
     
     def _monitor_loop(self) -> None:
         """Main clipboard monitoring loop"""
+        if not self._available:
+            event_bus.publish(Event(
+                event_type="CLIPBOARD_SKIP",
+                priority="INFO",
+                detail="pyperclip not installed; clipboard monitoring unavailable",
+                source="clipboard"
+            ))
+            return
+
         poll_interval = config.intervals.get("clipboard_poll_sec", 1.5)
         
         while self._running and not self._stop_event.is_set():
@@ -76,6 +90,15 @@ class ClipboardModule:
                 event_type="CLIPBOARD_SKIP",
                 priority="INFO",
                 detail="Clipboard monitoring disabled in config",
+                source="clipboard"
+            ))
+            return
+
+        if not self._available:
+            event_bus.publish(Event(
+                event_type="CLIPBOARD_SKIP",
+                priority="INFO",
+                detail="pyperclip not installed; clipboard monitoring unavailable",
                 source="clipboard"
             ))
             return

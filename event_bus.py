@@ -7,7 +7,7 @@ import queue
 from typing import Callable, Dict, List, Any
 from datetime import datetime
 from dataclasses import dataclass, asdict, field
-from collections import deque, field
+from collections import deque
 import json
 
 
@@ -41,7 +41,6 @@ class EventBus:
         self._lock = threading.Lock()
         self._running = False
         self._worker_thread = None
-        from collections import deque
         self._history: deque = deque(maxlen=200)
     
     def subscribe(self, event_type: str, callback: Callable) -> None:

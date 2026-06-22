@@ -64,11 +64,16 @@ class Watchdog:
                     text=True
                 )
                 
-                # Wait for process to complete
-                return_code = self.process.wait()
+                # Wait for process to complete and capture output to avoid pipe deadlock
+                stdout, stderr = self.process.communicate()
+                return_code = self.process.returncode
                 
                 if return_code == 0:
                     print("[Watchdog] GuardWatch exited normally")
+                    if stdout:
+                        print(stdout)
+                    if stderr:
+                        print(stderr)
                     break
                 
                 # Process crashed

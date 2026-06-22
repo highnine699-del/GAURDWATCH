@@ -3,6 +3,8 @@ Failed Login Counter Module
 Checks Windows Security logs for failed login attempts
 """
 import subprocess
+import time
+import threading
 from pathlib import Path
 from event_bus import Event, event_bus
 from config import config
@@ -13,20 +15,33 @@ class FailedLoginsModule:
     """Failed login detection module"""
     
     def __init__(self, session_dir: Path, db: EvidenceDatabase, session_id: str):
+        import platform
         self.session_dir = session_dir
         self.db = db
         self.session_id = session_id
         self._running = False
+        self._is_windows = platform.system() == "Windows"
         
-        # Check if win32 is available
-        self._win32_ok = True
-        try:
-            import win32evtlog
-        except ImportError:
-            self._win32_ok = False
+        # Check if win32 is available (Windows only)
+        self._win32_ok = False
+        if self._is_windows:
+            try:
+                import win32evtlog
+                self._win32_ok = True
+            except ImportError:
+                self._win32_ok = False
     
     def check_failed_logins(self) -> None:
         """Check Windows Security logs for failed login attempts"""
+        if not self._is_windows:
+            event_bus.publish(Event(
+                event_type="FAILED_LOGINS_SKIP",
+                priority="INFO",
+                detail="Failed login detection only available on Windows",
+                source="failed_logins"
+            ))
+            return
+        
         if not config.modules.get("failed_logins", True):
             event_bus.publish(Event(
                 event_type="FAILED_LOGINS_SKIP",

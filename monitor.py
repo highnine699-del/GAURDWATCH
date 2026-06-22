@@ -4,6 +4,7 @@ Detects when PC wakes from idle state
 """
 import threading
 import time
+import sys
 import ctypes
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,9 @@ class _LASTINPUTINFO(ctypes.Structure):
 
 def get_idle_seconds() -> float:
     """Get number of seconds since last user input"""
+    if sys.platform != 'win32':
+        return 0.0
+
     info = _LASTINPUTINFO()
     info.cbSize = ctypes.sizeof(info)
     try:

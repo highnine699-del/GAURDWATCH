@@ -19,12 +19,14 @@ class USBModule:
     """USB device detection module"""
     
     def __init__(self, session_dir: Path, db: EvidenceDatabase, session_id: str):
+        import platform
         self.session_dir = session_dir
         self.db = db
         self.session_id = session_id
         self._running = False
         self._stop_event = threading.Event()
         self._worker_thread: threading.Thread = None
+        self._is_windows = platform.system() == "Windows"
         self._known_drives: Dict[str, str] = {}
         
         self._drive_types = {
@@ -38,6 +40,9 @@ class USBModule:
     
     def _get_current_drives(self) -> Dict[str, str]:
         """Get current list of drives"""
+        if not self._is_windows:
+            return {}
+        
         drives = {}
         mask = ctypes.windll.kernel32.GetLogicalDrives()
         
@@ -88,8 +93,13 @@ class USBModule:
                                 file_type="usb_screenshot",
                                 size_bytes=filepath.stat().st_size
                             )
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            event_bus.publish(Event(
+                                event_type="USB_ERROR",
+                                priority="INFO",
+                                detail=f"USB screenshot failed: {e}",
+                                source="usb"
+                            ))
                 
                 # Check for removed drives
                 for drive in self._known_drives:

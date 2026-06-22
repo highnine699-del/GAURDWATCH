@@ -6,11 +6,18 @@ import threading
 import time
 from pathlib import Path
 from typing import Set
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 from event_bus import Event, event_bus
 from config import config
 from database import EvidenceDatabase
+
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    WATCHDOG_OK = True
+except ImportError:
+    Observer = None
+    FileSystemEventHandler = type("FileSystemEventHandler", (), {})
+    WATCHDOG_OK = False
 
 
 class FileActivityHandler(FileSystemEventHandler):

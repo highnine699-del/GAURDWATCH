@@ -159,7 +159,7 @@ class SessionManager:
         
         return removed
     
-    def list_sessions(self) -> list[Dict]:
+    def list_sessions(self) -> List[Dict]:
         """List all sessions with metadata"""
         sessions = []
         

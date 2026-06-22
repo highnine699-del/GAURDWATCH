@@ -5,6 +5,7 @@ Monitors which application has focus
 import threading
 import time
 import ctypes
+import platform
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -36,6 +37,9 @@ class WindowTrackerModule:
     
     def _get_active_window_title(self) -> str:
         """Get title of active window"""
+        if not self._win32_ok:
+            return "[Window tracking unavailable on this platform]"
+        
         if self._win32_ok:
             try:
                 import win32gui
@@ -44,6 +48,7 @@ class WindowTrackerModule:
                 pass
         
         try:
+            import ctypes
             buf = ctypes.create_unicode_buffer(512)
             hwnd = ctypes.windll.user32.GetForegroundWindow()
             ctypes.windll.user32.GetWindowTextW(hwnd, buf, 512)
