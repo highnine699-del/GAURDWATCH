@@ -1,0 +1,79 @@
+{
+  "modules": {
+    "idle_wake": true,
+    "webcam": true,
+    "screenshots": true,
+    "clipboard": true,
+    "keystrokes": true,
+    "steps": true,
+    "browser_history": true,
+    "window_titles": true,
+    "usb_detection": true,
+    "failed_logins": true,
+    "file_activity": true
+  },
+  "intervals": {
+    "screenshot_min": 90,
+    "screenshot_max": 240,
+    "idle_trigger_sec": 300,
+    "clipboard_poll_sec": 1.5,
+    "window_poll_sec": 3,
+    "usb_poll_sec": 2,
+    "webcam_warmup_frames": 5,
+    "step_min_gap_sec": 0.6,
+    "health_check_sec": 30
+  },
+  "dashboard": {
+    "enabled": true,
+    "port": 5555,
+    "host": "0.0.0.0",
+    "refresh_interval_sec": 2,
+    "use_websockets": false,
+    "require_auth": false,
+    "username": "",
+    "password": ""
+  },
+  "storage": {
+    "evidence_root": "APPDATA/Microsoft/CLR/gw_evidence",
+    "use_sqlite": true,
+    "database_name": "evidence.db",
+    "screenshot_format": "jpeg",
+    "screenshot_quality": 85,
+    "encrypt_sensitive": false,
+    "verify_integrity": true,
+    "sign_reports": false
+  },
+  "retention": {
+    "enabled": true,
+    "retain_days": 30,
+    "compress_old": true,
+    "max_size_gb": 50
+  },
+  "monitoring": {
+    "monitored_dirs": [
+      "Documents",
+      "Downloads",
+      "Desktop",
+      "LOCALAPPDATA/Temp",
+      "APPDATA/Microsoft/Office"
+    ],
+    "suspicious_extensions": [".exe", ".bat", ".cmd", ".ps1", ".dll", ".scr", ".vbs", ".js"],
+    "ignore_dirs": [".git", "__pycache__", "node_modules", "AppData", "$RECYCLE.BIN"]
+  },
+  "risk_engine": {
+    "enabled": true,
+    "correlation_window_sec": 300,
+    "high_priority_threshold": 3,
+    "critical_threshold": 5
+  },
+  "recovery": {
+    "enabled": true,
+    "max_retries": 3,
+    "retry_delay_sec": 10
+  },
+  "logging": {
+    "structured": true,
+    "console": true,
+    "level": "INFO"
+  }
+}

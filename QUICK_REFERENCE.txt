@@ -1,0 +1,185 @@
+═══════════════════════════════════════════════════════════════════════════════
+  GuardWatch v3.0 — QUICK REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+INSTALLATION
+────────────────────────────────────────────────────────────────────────────────
+1. Double-click setup.bat
+   OR manually run:
+   pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog
+
+
+RUNNING GUARDWATCH
+────────────────────────────────────────────────────────────────────────────────
+
+Start Monitoring with Web Dashboard (recommended):
+  python guardwatch.py
+  → Dashboard opens at http://localhost:5555
+
+Silent Mode (no window, runs in background):
+  pythonw guardwatch.py
+  → Dashboard still available at http://localhost:5555
+
+View Evidence from Past Sessions:
+  python guardwatch.py --report
+
+Delete All Evidence:
+  python guardwatch.py --clear
+
+
+WHAT GETS MONITORED
+────────────────────────────────────────────────────────────────────────────────
+✓  Webcam snapshot on wake (WHO sat at the PC)
+✓  Every mouse click with annotated screenshot (WHAT they did)
+✓  All keystrokes typed (passwords, searches, messages)
+✓  Everything copied to clipboard (sensitive data)
+✓  Which apps were in focus (programs opened)
+✓  Browser history before/after (websites visited)
+✓  Exact timestamps of idle/wake events (WHEN they used it)
+✓  Failed login attempts (how they got in)
+✓  USB devices inserted (file theft detection)
+✓  Random timed screenshots (context of activity)
+✓  FILE ACTIVITY MONITORING (NEW) — tracks file changes + suspicious patterns
+
+
+WHERE EVIDENCE IS SAVED
+────────────────────────────────────────────────────────────────────────────────
+Hidden folder:
+  C:\Users\YourName\AppData\Roaming\Microsoft\CLR\gw_evidence\
+
+Organized by session:
+  gw_evidence\
+  ├── 20260622_011500\      (date + time you started monitoring)
+  │   ├── webcam\           (photos of intruder)
+  │   ├── steps\            (annotated click screenshots)
+  │   ├── screenshots\      (timed desktop captures)
+  │   ├── file_activity\    (file change logs - NEW in v3.0)
+  │   ├── keystrokes.txt
+  │   ├── clipboard.txt
+  │   ├── window_titles.txt
+  │   ├── file_activity.json (file monitoring events - NEW)
+  │   ├── events.json       (complete event log)
+  │   └── evidence_report.html  ← OPEN THIS IN BROWSER
+  └── 20260623_000115\      (next session)
+      └── ...
+
+
+EVIDENCE REPORT (HTML)
+────────────────────────────────────────────────────────────────────────────────
+Open evidence_report.html in your browser to see:
+  • Webcam photos of whoever sat down
+  • Every mouse click with visual crosshair marking the spot
+  • Step-by-step replay (like Windows Steps Recorder)
+  • All evidence embedded in one portable file
+  • Print it as proof for your report/complaint
+
+LIVE WEB DASHBOARD (NEW in v3.0)
+────────────────────────────────────────────────────────────────────────────────
+Access at http://localhost:5555 while GuardWatch is running:
+  • Real-time event stream (auto-refreshes every 2 seconds)
+  • Evidence statistics (webcam, steps, screenshots, file changes)
+  • High-priority event highlighting
+  • One-click controls (open evidence folder, stop monitoring)
+  • Accessible from any device on your network
+
+
+SETTING UP AUTO-START (RUNS ON EVERY BOOT)
+────────────────────────────────────────────────────────────────────────────────
+Windows Startup Folder (easiest):
+  1. Press Win+R → type: shell:startup → Enter
+  2. Create a text file called guardwatch.bat:
+     @echo off
+     pythonw "C:\full\path\to\guardwatch.py"
+  3. Save. Done — runs automatically on boot.
+
+Task Scheduler (more reliable):
+  1. Win+R → taskschd.msc → Enter
+  2. Create Basic Task...
+     - Name: GuardWatch
+     - Trigger: At startup
+     - Action: Start program
+     - Program: pythonw.exe
+     - Arguments: "C:\path\to\guardwatch.py"
+  3. Check: Run with highest privileges
+  4. Finish
+
+
+STOPPING & EXITING
+────────────────────────────────────────────────────────────────────────────────
+While GuardWatch is running:
+  Press Ctrl+C to stop cleanly
+
+Important: Wait 2–3 seconds after Ctrl+C for HTML report to generate.
+Do NOT force-kill (Task Manager) or evidence may be lost.
+
+
+INTERPRETING EVENTS.JSON
+────────────────────────────────────────────────────────────────────────────────
+HIGH-priority events are the smoking gun:
+
+⚠️  WAKE_FROM_IDLE
+    PC woke from idle (someone started using it while you were asleep)
+
+⚠️  WEBCAM_PHOTO
+    Captured photo of whoever just sat down
+
+⚠️  USB_INSERTED
+    Someone plugged in a flash drive (trying to steal files?)
+
+⚠️  FAILED_LOGINS
+    Multiple wrong password attempts (they were guessing passwords)
+
+⚠️  FILE_CREATED (NEW in v3.0)
+    Suspicious file created (.exe, .bat, .ps1, etc.)
+
+
+EXAMPLE SESSION REPORT
+────────────────────────────────────────────────────────────────────────────────
+📁  SESSION  20260622_011500
+    Path: C:\Users\you\AppData\Roaming\Microsoft\CLR\gw_evidence\20260622_011500
+
+    ⚠️  HIGH-PRIORITY EVENTS (4):
+       [01:16:47] WAKE_FROM_IDLE: PC active after 47 min idle
+       [01:16:49] WEBCAM_PHOTO: Saved → cam_intruder_011649_1.jpg
+       [01:16:51] USB_INSERTED: Removable drive at E:\
+       [01:17:15] FAILED_LOGINS: 5 failed login attempt(s)
+
+    Evidence files:
+      Webcam photos     : 2  ← WHO sat at the PC
+      Steps (annotated) : 23 click screenshots
+      Timed screenshots : 18
+      File activity     : 15 events (NEW in v3.0)
+      Keystrokes        : 3847 bytes
+      Clipboard         : 2156 bytes
+      Window titles     : ✓
+      Browser (before)  : ✓
+      Browser (after)   : ✓
+      HTML report       : ✓  →  evidence_report.html
+
+
+TROUBLESHOOTING
+────────────────────────────────────────────────────────────────────────────────
+
+Q: No webcam photos captured?
+A: Make sure your camera works in the Camera app first. If no camera is 
+   available, GuardWatch logs a WEBCAM_SKIP event but continues monitoring
+   other channels.
+
+Q: "wevtutil access denied" error?
+A: Run Command Prompt as Administrator. The failed login counter needs
+   admin privileges to read Windows Security logs.
+
+Q: Evidence folder missing?
+A: It's hidden in AppData. Press Win+R and paste:
+   %APPDATA%\Microsoft\CLR\gw_evidence
+   (It will be created automatically on first run)
+
+Q: Nothing recorded after I stopped?
+A: Make sure you pressed Ctrl+C cleanly (not force-killed). Wait a few
+   seconds for the HTML report to generate.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+GuardWatch v3.0 — Catch unauthorized PC access with timestamped proof.
+Now with FILE ACTIVITY MONITORING and LIVE WEB DASHBOARD.
+═══════════════════════════════════════════════════════════════════════════════

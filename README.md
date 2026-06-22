@@ -1,38 +1,35 @@
-# GuardWatch v3.0 — PC Intruder Evidence Suite + Web Dashboard
+# GuardWatch v4.0 — PC Intruder Evidence Suite (Refactored)
 
 **Captures timestamped proof of unauthorized access on YOUR OWN PC.**
-**NEW: File Activity Monitoring + Live Web Dashboard**
+**MAJOR REFACTOR: Modular architecture, SQLite storage, health monitoring, risk engine, enhanced dashboard**
 
 ---
 
-## What It Does
+## What's New in v4.0
 
-GuardWatch monitors 11 different evidence channels and saves everything to a hidden folder with timestamps. If someone is using your PC without permission while you sleep, GuardWatch will document exactly what they did.
+GuardWatch v4.0 is a complete architectural overhaul addressing engineering maturity concerns:
 
-### 11 Evidence Modules
+### Architecture Improvements
+- **Modular Design**: Split from 1000+ line monolith into 14 focused modules
+- **Event Bus**: Decoupled communication using pub/sub pattern
+- **SQLite Database**: Replaced JSON files with queryable evidence storage
+- **Configuration System**: All settings configurable via `config.json`
+- **Health Monitoring**: Automatic module health checks with recovery
 
-| Module | What It Captures | Why It Matters |
-|--------|------------------|---|
-| **Idle/Wake Detector** | Exact moment PC wakes from idle | Proves someone started using your PC while you were asleep |
-| **Webcam Snapshot** | Photo of whoever sits down on wake event | **STRONGEST PROOF** — identity of the intruder |
-| **Steps Recorder** | Annotated screenshot on every mouse click | Visual proof of every action they took |
-| **Timed Screenshots** | Desktop every 90–240 seconds | Context of what was on screen |
-| **Keystroke Logger** | Everything typed, organized by minute | What they typed (passwords, searches, etc.) |
-| **Clipboard Monitor** | Every copy/paste in full | Sensitive data they may have copied |
-| **Window Title Tracker** | Which app had focus and when | What programs they opened and used |
-| **Browser History Diff** | Before/after snapshots of browsing | Which new URLs they visited |
-| **USB Device Detection** | Any drive inserted or removed | Whether they tried to steal files |
-| **Failed Login Counter** | Wrong password attempts from Security log | How they bypassed your password |
-| **File Activity Monitor (NEW)** | Tracks all file changes in key folders | Detects suspicious file creation/deletion |
+### New Features
+- **Risk Engine**: Correlates events to calculate threat levels
+- **Enhanced Dashboard**: Pause, screenshot, export, search, filter, download controls
+- **Multiple Export Formats**: HTML, JSON, CSV, ZIP, PDF (optional)
+- **Evidence Integrity**: SHA256 verification for all files
+- **Session Summaries**: Detailed shutdown reports with risk assessment
+- **Search Functionality**: Full-text search across all events
+- **AES Encryption**: Optional encryption for sensitive evidence
+- **Dashboard Authentication**: Optional password protection
 
-### 🆕 Live Web Dashboard
-
-GuardWatch v3.0 now includes a real-time web dashboard accessible at `http://localhost:5555`:
-- Live event stream with auto-refresh every 2 seconds
-- Evidence statistics (webcam photos, steps, screenshots, file changes)
-- High-priority event highlighting
-- One-click controls (open evidence folder, stop monitoring)
-- Accessible from any device on your network
+### Reliability
+- **Automatic Recovery**: Failed modules auto-restart with configurable retry logic
+- **Log Rotation**: Automatic cleanup of old sessions (configurable retention)
+- **Structured Logging**: JSON-formatted events for easier analysis
 
 ---
 
@@ -44,7 +41,7 @@ GuardWatch v3.0 now includes a real-time web dashboard accessible at `http://loc
 
 Or manually run:
 ```cmd
-pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog
+pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog cryptography
 ```
 
 **Required packages:**
@@ -56,6 +53,7 @@ pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog
 - `pywin32` — Windows API (for event log, window titles)
 - `flask` — Web dashboard server
 - `watchdog` — File activity monitoring
+- `cryptography` — AES encryption for sensitive evidence
 
 ---
 
@@ -63,166 +61,287 @@ pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog
 
 ### Option 1: Monitor Now with Web Dashboard (Recommended)
 ```cmd
-python guardwatch.py
+python main.py
 ```
-GuardWatch starts monitoring and launches a live web dashboard at `http://localhost:5555`. Open this URL in your browser to see real-time evidence collection. Press **Ctrl+C** to stop.
+GuardWatch starts monitoring and launches a live web dashboard at `http://localhost:5555`. Press **Ctrl+C** to stop.
 
 ### Option 2: Run Silent (No Console)
 ```cmd
-pythonw guardwatch.py
+pythonw main.py
 ```
-Runs completely in background — no visible window. Evidence is still collected. Dashboard still available at `http://localhost:5555`.
+Runs completely in background — no visible window. Dashboard still available at `http://localhost:5555`.
 
 ### Option 3: View Evidence from Previous Sessions
 ```cmd
-python guardwatch.py --report
+python main.py --report
 ```
-Prints a text summary of all sessions and what was captured.
+Lists all sessions with metadata.
 
 ### Option 4: Delete All Evidence
 ```cmd
-python guardwatch.py --clear
+python main.py --clear
 ```
-Securely wipes all evidence. (Asks for confirmation first.)
+Securely wipes all evidence (asks for confirmation).
 
 ---
 
-## How to Use It
+## Configuration
 
-### Scenario: Someone is using your PC while you sleep
+All settings are in `config.json`. Key sections:
 
-1. **Open Command Prompt** (Win+R → `cmd` → Enter)
-2. **Navigate to where you saved guardwatch.py:**
-   ```cmd
-   cd C:\Users\YourName\Desktop
-   ```
-3. **Start monitoring:**
-   ```cmd
-   python guardwatch.py
-   ```
-4. **Open the web dashboard** at `http://localhost:5555` in your browser to see live evidence collection.
-5. **Leave it running.** It will monitor all 11 channels silently.
-6. **The next morning, check the evidence:**
-   ```cmd
-   python guardwatch.py --report
-   ```
-
----
-
-## Auto-Start on Boot (So You Never Forget)
-
-You can set GuardWatch to run automatically every time Windows starts, even before you log in.
-
-### Option A: Windows Startup Folder (Easiest)
-
-1. Press **Win+R** and type: `shell:startup`
-2. Create a text file called `guardwatch.bat` with this content:
-   ```batch
-   @echo off
-   pythonw "C:\full\path\to\guardwatch.py"
-   ```
-   (Replace `C:\full\path\to\guardwatch.py` with the actual path where you saved guardwatch.py)
-3. Save and close. Done — it will run automatically on next boot.
-
-### Option B: Task Scheduler (More Reliable)
-
-1. Press **Win+R** → `taskschd.msc` → Enter
-2. **Create Basic Task...**
-   - Name: `GuardWatch`
-   - Trigger: **At startup**
-   - Action: **Start a program**
-   - Program: `pythonw.exe`
-   - Arguments: `"C:\full\path\to\guardwatch.py"`
-3. Check the box **Run with highest privileges**
-4. Click **Finish**
-
-Now GuardWatch will run silently every time Windows boots.
-
----
-
-## Understanding the Evidence
-
-### Where It's Saved
-```
-C:\Users\YourName\AppData\Roaming\Microsoft\CLR\gw_evidence\
-    └── 20260622_011500/           ← Session ID (date + time started)
-        ├── webcam/                ← Webcam photos (WHO sat at the PC)
-        ├── steps/                 ← Annotated click screenshots
-        ├── screenshots/           ← Timed desktop captures
-        ├── file_activity/         ← File change logs (NEW in v3.0)
-        ├── keystrokes.txt         ← Everything typed
-        ├── clipboard.txt          ← Every copy/paste
-        ├── window_titles.txt      ← Apps in focus
-        ├── file_activity.json     ← File monitoring events (NEW)
-        ├── browser_history_before.json
-        ├── browser_history_after.json
-        ├── events.json            ← Full event log with timestamps
-        └── evidence_report.html   ← Open in browser for full report
-```
-
-### Reading the Evidence Report
-
-**Open `evidence_report.html` in any web browser.** It's formatted like Windows Steps Recorder — each step shows:
-- 📷 Webcam photo of the intruder
-- 🖱️ Every click with visual crosshair marking where they clicked
-- ⏰ Exact timestamp
-- All embedded in one portable file (no external links)
-
-You can print it or send it to prove unauthorized access.
-
-### Key File: events.json
-
-This JSON file lists every logged event in order with timestamps:
-
+### Module Control
 ```json
-[
-  {"time": "2026-06-22T01:15:00", "priority": "HIGH", "event": "WAKE_FROM_IDLE", "detail": "PC active after 47 min idle — POSSIBLE INTRUDER"},
-  {"time": "2026-06-22T01:15:02", "priority": "HIGH", "event": "WEBCAM_PHOTO", "detail": "Saved → cam_intruder_011502_1.jpg"},
-  {"time": "2026-06-22T01:15:08", "priority": "INFO", "event": "WINDOW_FOCUS", "detail": "Firefox - Google Search"},
+"modules": {
+  "idle_wake": true,
+  "webcam": true,
+  "screenshots": true,
+  "keystrokes": true,
   ...
-]
+}
 ```
 
-**HIGH priority events are the smoking gun — highlighted with ⚠️ in reports.**
+### Dashboard Settings
+```json
+"dashboard": {
+  "enabled": true,
+  "port": 5555,
+  "require_auth": false,
+  "username": "",
+  "password": ""
+}
+```
+
+### Storage & Retention
+```json
+"storage": {
+  "use_sqlite": true,
+  "verify_integrity": true,
+  "encrypt_sensitive": false
+},
+"retention": {
+  "enabled": true,
+  "retain_days": 30,
+  "max_size_gb": 50
+}
+```
+
+### Risk Engine
+```json
+"risk_engine": {
+  "enabled": true,
+  "correlation_window_sec": 300,
+  "high_priority_threshold": 3,
+  "critical_threshold": 5
+}
+```
 
 ---
 
-## What If They Bypass Your Password?
+## Architecture
 
-GuardWatch logs failed login attempts from Windows Security logs. If someone tried 10+ times before getting in, the `--report` output will show:
-
+### Module Structure
 ```
-⚠️  FAILED_LOGINS: 8 failed login attempt(s) found — someone was trying passwords!
+guardwatch/
+├── main.py              # Application entry point
+├── config.py            # Configuration management
+├── config.json          # Configuration file
+├── event_bus.py         # Central event bus
+├── database.py          # SQLite evidence storage
+├── health_monitor.py    # Module health & recovery
+├── hashing.py           # SHA256 integrity verification
+├── encryption.py        # AES encryption
+├── session_manager.py   # Session lifecycle
+├── risk_engine.py       # Correlated threat analysis
+├── dashboard.py         # Enhanced web dashboard
+├── report.py            # Multi-format report generator
+├── webcam.py            # Webcam capture module
+├── keyboard.py          # Keystroke logger
+├── clipboard.py         # Clipboard monitor
+├── steps.py             # Steps recorder
+├── screenshots.py       # Timed screenshots
+├── usb.py               # USB detection
+├── browser.py           # Browser history
+├── file_monitor.py      # File activity monitoring
+├── monitor.py           # Idle/wake detector
+├── window_tracker.py    # Window title tracking
+└── failed_logins.py     # Failed login counter
 ```
 
-This is strong evidence they didn't have your password and had to brute-force it.
+### Event Flow
+```
+Module → Event Bus → Dashboard
+                  → Database
+                  → Risk Engine
+                  → Health Monitor
+```
+
+---
+
+## Enhanced Dashboard Features
+
+The v4.0 dashboard includes:
+
+### Active Controls
+- **Pause/Resume**: Temporarily stop monitoring
+- **Screenshot**: Trigger immediate screenshot
+- **Export**: Download evidence in JSON/HTML/CSV/ZIP
+- **Open Folder**: Open evidence directory
+- **Stop**: Shutdown GuardWatch
+
+### Search & Filter
+- Full-text search across all events
+- Filter by event type (Wake, USB, Files, etc.)
+- Filter by priority (High priority only)
+- Real-time event stream
+
+### Statistics
+- Session uptime
+- Total events count
+- High-priority events count
+- Evidence file counts (webcam, steps, screenshots, files)
+
+---
+
+## Evidence Storage
+
+### SQLite Database
+Evidence is now stored in SQLite for fast querying:
+- Sessions table (metadata, duration, event counts)
+- Events table (all events with timestamps, priority, data)
+- Files table (evidence file metadata)
+- Evidence hashes table (SHA256 integrity verification)
+
+### File Structure
+```
+gw_evidence/
+└── 20260622_011500/
+    ├── evidence.db              # SQLite database
+    ├── evidence_hashes.json     # SHA256 hashes
+    ├── webcam/                  # Webcam photos
+    ├── steps/                   # Annotated screenshots
+    ├── screenshots/             # Timed captures
+    ├── file_activity/           # File change logs
+    ├── keystrokes.txt           # Keystrokes
+    ├── clipboard.txt            # Clipboard content
+    ├── window_titles.txt        # Window focus history
+    ├── browser_history_before.json
+    ├── browser_history_after.json
+    ├── evidence_report.html     # HTML report
+    ├── evidence_report.json     # JSON report
+    └── evidence_report.csv     # CSV report
+```
+
+---
+
+## Risk Engine
+
+The risk engine correlates events to calculate threat levels:
+
+### Pattern Detection
+- **Wake + USB**: Critical (potential data theft)
+- **Wake + Clipboard**: High (password stealing)
+- **Multiple USB**: Critical (bulk data exfiltration)
+- **Failed Logins**: High (brute force attempt)
+- **Suspicious Files**: High (malware installation)
+
+### Risk Levels
+- **LOW**: 0-1 high-priority events
+- **MEDIUM**: 1-2 high-priority events
+- **HIGH**: 3-4 high-priority events
+- **CRITICAL**: 5+ high-priority events or dangerous patterns
+
+---
+
+## Health Monitoring & Recovery
+
+### Module Health
+Each module reports health status:
+- **HEALTHY**: Operating normally
+- **DEGRADED**: No recent heartbeat
+- **FAILED**: Error occurred
+- **RESTARTING**: Recovery in progress
+
+### Automatic Recovery
+Configurable automatic recovery for failed modules:
+- Maximum retry attempts (default: 3)
+- Retry delay (default: 10 seconds)
+- Configurable per module
+
+---
+
+## Evidence Integrity
+
+### SHA256 Verification
+All evidence files are automatically hashed:
+- Hashes stored in `evidence_hashes.json`
+- Verification on shutdown
+- Integrity report generated
+
+### Encryption (Optional)
+AES-256 encryption for sensitive files:
+- Keystrokes
+- Clipboard content
+- Configurable via `config.json`
+
+---
+
+## Export Formats
+
+### Available Formats
+- **HTML**: Browser-friendly report with styling
+- **JSON**: Machine-readable structured data
+- **CSV**: Spreadsheet-compatible format
+- **ZIP**: Complete evidence archive
+- **PDF**: Professional report (requires weasyprint)
+
+### Export via Dashboard
+Use the dashboard export buttons or API:
+```bash
+curl -X POST http://localhost:5555/api/export -H "Content-Type: application/json" -d '{"format":"json"}'
+```
+
+---
+
+## Auto-Start on Boot
+
+### Windows Startup Folder
+1. Press **Win+R** and type: `shell:startup`
+2. Copy `autostart.bat` to that folder
+3. Done — runs automatically on boot
+
+### Task Scheduler
+1. Press **Win+R** → `taskschd.msc` → Enter
+2. Create Basic Task → Name: `GuardWatch`
+3. Trigger: **At startup**
+4. Action: **Start a program**
+5. Program: `pythonw.exe`
+6. Arguments: `"C:\path\to\main.py"`
+7. Check **Run with highest privileges**
 
 ---
 
 ## Troubleshooting
 
-### "No camera found"
-- GuardWatch skips webcam if no camera is detected. Other modules still work.
-- Verify your camera works in Camera app first.
+### Module Not Starting
+- Check health status in dashboard
+- Review console output for errors
+- Verify dependencies installed
+- Check config.json module settings
 
-### "wevtutil access denied"
-- Failed login counter needs **Admin** privileges to read Security logs.
-- Run Command Prompt as Administrator before starting GuardWatch.
+### Database Locked
+- Ensure only one GuardWatch instance running
+- Check for zombie processes
+- Restart GuardWatch cleanly
 
-### "Missing dependencies"
-- Run `setup.bat` again or manually install:
-  ```cmd
-  pip install mss Pillow pyperclip pynput opencv-python pywin32 flask watchdog
-  ```
+### Dashboard Not Accessible
+- Verify port 5555 not in use
+- Check firewall settings
+- Review dashboard config in config.json
 
-### "Evidence folder not found"
-- Check: `C:\Users\YourName\AppData\Roaming\Microsoft\CLR\gw_evidence\`
-- Make sure the path exists (run `mkdir` if needed)
-
-### No evidence after stopping
-- Press **Ctrl+C** cleanly to let GuardWatch save files
-- Don't force-kill the process (Task Manager kill = data loss)
-- Wait 2–3 seconds after pressing Ctrl+C for HTML report to generate
+### Evidence Not Saving
+- Check disk space
+- Verify write permissions to evidence directory
+- Review session manager logs
 
 ---
 
@@ -230,57 +349,25 @@ This is strong evidence they didn't have your password and had to brute-force it
 
 ✓ **This is YOUR PC** — you own it  
 ✓ **You can monitor it however you want** — it's your device  
-✓ **Evidence is admissible** — timestamped, documented, self-contained  
+✓ **Evidence is admissible** — timestamped, documented, integrity-verified  
 
 **Do not use this on anyone else's computer without their knowledge.** Monitoring someone else's device without consent is illegal in most jurisdictions.
 
 ---
 
-## Sample Output
+## Migration from v3.0
 
-When you run `python guardwatch.py`:
+### Breaking Changes
+- Entry point changed from `guardwatch.py` to `main.py`
+- Configuration moved to `config.json`
+- Evidence storage uses SQLite instead of JSON files
+- Some command-line options changed
 
-```
-╔═══════════════════════════════════════════════════════════╗
-║          GUARDWATCH v3.0 — ACTIVE + WEB DASHBOARD         ║
-║                                                           ║
-║  Session : 20260622_011500                                ║
-║  Dashboard: http://localhost:5555                          ║
-║                                                           ║
-║  Modules:                                                 ║
-║  ✓ Idle/wake       ✓ Webcam          ✓ File Monitor       ║
-║  ✓ Screenshots     ✓ Window titles   ✓ USB detector       ║
-║  ✓ Click recorder  ✓ Clipboard       ✓ Failed logins      ║
-║  ✓ Keystrokes      ✓ Browser hist.                        ║
-║                                                           ║
-║  Press Ctrl+C to stop and save evidence                  ║
-╚═══════════════════════════════════════════════════════════╝
-
-✓ Dashboard live at: http://localhost:5555
-  Open in your browser (or any device on your network)
-
-[01:15:02] SESSION_START: GuardWatch v3.0 monitoring started
-[01:15:12] PC_IDLE: No activity for 300s — standby
-[01:16:47] WAKE_FROM_IDLE: PC active after 2 min idle — POSSIBLE INTRUDER
-⚠️  [01:16:49] WEBCAM_PHOTO: Saved → cam_intruder_011649_1.jpg
-[01:16:51] WINDOW_FOCUS: Firefox - Google Search
-    [01:16:58] STEP: Step 1 — Left-click at (872, 445)
-    [01:17:03] STEP: Step 2 — Left-click at (556, 120)
-    [01:17:09] KEYSTROKES: [ Typed search query ]
-    [01:17:15] FILE_MONITOR_START: Monitoring 5 folders
-    [01:17:20] FILE_CREATED: Created → suspicious.exe (45212 bytes)
-```
+### Data Migration
+- v3.0 JSON evidence files remain readable
+- New sessions use SQLite
+- Old sessions can be viewed with `--report`
 
 ---
 
-## Need Help?
-
-**Questions about using GuardWatch?**
-- Check the text summary: `python guardwatch.py --report`
-- Open the HTML report in your browser: `evidence_report.html`
-- All files are timestamped and self-documenting
-
----
-
-**GuardWatch v3.0** — Catch intruders with proof + live web dashboard.
-"# GAURDWATCH" 
+**GuardWatch v4.0** — Engineering maturity meets comprehensive evidence collection.
