@@ -40,6 +40,7 @@ class Dashboard:
         
         # Authentication decorator
         from functools import wraps
+        from flask import abort
         
         def require_auth(f):
             @wraps(f)
@@ -51,6 +52,15 @@ class Dashboard:
                     
                     if not auth or auth.username != username or auth.password != password:
                         return jsonify({"error": "Unauthorized"}), 401
+                
+                # Remote access check
+                if config.dashboard.get("allow_remote", True):
+                    allowed_hosts = config.dashboard.get("allowed_hosts", [])
+                    if allowed_hosts:
+                        client_ip = request.remote_addr
+                        if client_ip not in allowed_hosts and client_ip != "127.0.0.1" and client_ip != "::1":
+                            return jsonify({"error": "Access denied from this IP"}), 403
+                
                 return f(*args, **kwargs)
             return decorated
         
@@ -504,33 +514,56 @@ class Dashboard:
         port = config.dashboard.get("port", 5555)
         
         use_websockets = config.dashboard.get("use_websockets", False)
+        use_https = config.dashboard.get("use_https", False)
+        
+        ssl_context = None
+        if use_https:
+            ssl_cert = config.dashboard.get("ssl_cert", "")
+            ssl_key = config.dashboard.get("ssl_key", "")
+            if ssl_cert and ssl_key:
+                ssl_context = (ssl_cert, ssl_key)
+                print(f"[Dashboard] HTTPS enabled with SSL certificate")
         
         if use_websockets:
             # Run with SocketIO
             self._dashboard_thread = threading.Thread(
                 target=self.socketio.run,
-                kwargs={"app": self.app, "host": host, "port": port, "use_reloader": False},
+                kwargs={
+                    "app": self.app,
+                    "host": host,
+                    "port": port,
+                    "use_reloader": False,
+                    "ssl_context": ssl_context
+                },
                 daemon=True
             )
         else:
             # Run with regular Flask
             self._dashboard_thread = threading.Thread(
                 target=self.app.run,
-                kwargs={"host": host, "port": port, "use_reloader": False},
+                kwargs={
+                    "host": host,
+                    "port": port,
+                    "use_reloader": False,
+                    "ssl_context": ssl_context
+                },
                 daemon=True
             )
         
         self._dashboard_thread.start()
         
-        url = f"http://localhost:{port}"
+        protocol = "https" if use_https else "http"
+        url = f"{protocol}://localhost:{port}"
         ws_status = "with WebSockets" if use_websockets else "with polling"
-        print(f"[Dashboard] Dashboard running at {url} {ws_status}")
+        remote_status = "Remote access enabled" if config.dashboard.get("allow_remote", True) else "Local only"
+        print(f"[Dashboard] Dashboard running at {url} {ws_status} ({remote_status})")
         
-        # Auto-open browser
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+        # Auto-open browser only if local
+        if host in ["127.0.0.1", "localhost"] or not config.dashboard.get("allow_remote", True):
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
     
     def stop(self) -> None:
         """Stop dashboard server"""

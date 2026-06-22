@@ -21,6 +21,10 @@ class SessionManager:
         self.current_session_dir: Optional[Path] = None
         self.db: Optional[EvidenceDatabase] = None
         self.hasher: Optional[EvidenceHasher] = None
+        
+        # Run cleanup on initialization
+        self.cleanup_old_sessions()
+        self.enforce_size_limit()
     
     def create_session(self) -> str:
         """Create a new evidence session"""

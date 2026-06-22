@@ -29,9 +29,14 @@
     "host": "0.0.0.0",
     "refresh_interval_sec": 2,
     "use_websockets": false,
-    "require_auth": false,
-    "username": "",
-    "password": ""
+    "require_auth": true,
+    "username": "admin",
+    "password": "guardwatch",
+    "allow_remote": true,
+    "allowed_hosts": [],
+    "use_https": false,
+    "ssl_cert": "",
+    "ssl_key": ""
   },
   "storage": {
     "evidence_root": "APPDATA/Microsoft/CLR/gw_evidence",

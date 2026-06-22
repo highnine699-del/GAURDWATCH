@@ -80,6 +80,9 @@ class GuardWatch:
         # Initialize risk engine
         self.risk_engine = RiskEngine(self.db, self.session_id)
         
+        # Start periodic cleanup thread
+        self._start_cleanup_thread()
+        
         # Initialize dashboard
         self.dashboard = Dashboard(self.db, self.session_id, self.session_dir)
         
@@ -129,6 +132,36 @@ class GuardWatch:
                 except Exception as e:
                     print(f"  ✗ Error resuming {name}: {e}")
             print("[GuardWatch] Monitoring resumed.")
+    
+    def _start_cleanup_thread(self) -> None:
+        """Start periodic cleanup thread"""
+        if not config.retention.get("cleanup_on_startup", True):
+            return
+        
+        cleanup_interval_hours = config.retention.get("cleanup_interval_hours", 24)
+        cleanup_interval_sec = cleanup_interval_hours * 3600
+        
+        def cleanup_loop():
+            while self._running and not self._stop_event.is_set():
+                try:
+                    # Wait for cleanup interval
+                    for _ in range(cleanup_interval_sec):
+                        if self._stop_event.is_set():
+                            return
+                        time.sleep(1)
+                    
+                    # Run cleanup
+                    if self._running:
+                        removed = self.session_manager.cleanup_old_sessions()
+                        size_removed = self.session_manager.enforce_size_limit()
+                        if removed > 0 or size_removed > 0:
+                            print(f"[Cleanup] Removed {removed} old sessions, {size_removed} for size limit")
+                except Exception as e:
+                    print(f"[Cleanup] Error: {e}")
+        
+        self._cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+        self._cleanup_thread.start()
+        print(f"[Cleanup] Periodic cleanup thread started (interval: {cleanup_interval_hours}h)")
     
     def start_modules(self) -> None:
         """Start all monitoring modules"""
